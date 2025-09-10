@@ -73,6 +73,29 @@ class DownloadController extends Controller
         }
     }
 
+    public function update(Request $request, Download $download)
+    {
+        $request->validate([
+            'title' => 'required|string|max:255'
+        ]);
+
+        try {
+            $download->update(['title' => $request->title]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Название успешно обновлено'
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Update title error: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Ошибка при обновлении названия'
+            ], 500);
+        }
+    }
+
     private function extractVideoId(string $url): ?string
     {
         $parsedUrl = parse_url($url);
