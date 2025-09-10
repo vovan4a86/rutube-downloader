@@ -40,7 +40,6 @@
                             <tr>
                                 <th>Видео</th>
                                 <th>Статус</th>
-                                {{--                                <th>Дата</th>--}}
                                 <th>Действия</th>
                             </tr>
                             </thead>
@@ -48,13 +47,16 @@
                             @foreach($downloads as $download)
                                 <tr>
                                     <td>
-                                        <span class="editable-title" data-id="{{ $download->id }}">
-                                            {{ $download->title ?? $download->video_id }}
+                                        <div class="title-container" data-id="{{ $download->id }}">
+                                            <span
+                                                class="title-text">{{ $download->title ?? $download->video_id }}</span>
                                             <i class="fas fa-edit edit-icon"></i>
-                                        </span>
-                                        {{--                                        <button class="btn btn-sm btn-outline-primary mobile-edit-btn" data-id="{{ $download->id }}">--}}
-                                        {{--                                            <i class="fas fa-edit"></i>--}}
-                                        {{--                                        </button>--}}
+                                            <button class="btn btn-sm btn-outline-primary mobile-edit-btn"
+                                                    data-id="{{ $download->id }}">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                        </div>
+
                                     </td>
                                     <td>
                                 <span class="badge
@@ -65,7 +67,6 @@
                                     {{ $download->status }}
                                 </span>
                                     </td>
-                                    {{--                                    <td>{{ $download->created_at->format('d.m.Y H:i') }}</td>--}}
                                     <td class="action-buttons d-flex justify-content-around">
                                         @if($download->status === 'completed')
                                             <div>
@@ -99,39 +100,29 @@
 
                 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
                 <script>
-                    // Добавляем подтверждение перед удалением
-                    document.addEventListener('DOMContentLoaded', function () {
-                        const deleteForms = document.querySelectorAll('form[action*="destroy"]');
-
-                        deleteForms.forEach(form => {
-                            form.addEventListener('submit', function (e) {
-                                if (!confirm('Вы уверены, что хотите удалить этот файл?')) {
-                                    e.preventDefault();
-                                }
-                            });
-                        });
-                    });
-
                     // Функция активации редактирования
                     function activateEditMode(element) {
-                        const $this = $(element);
-                        const currentText = $this.text().trim();
-                        const id = $this.data('id');
+                        const $container = $(element);
+                        const $titleText = $container.find('.title-text');
+                        const currentText = $titleText.text().trim();
+                        const id = $container.data('id');
+
+                        // Создаем input для редактирования
+                        const $input = $(`<input type="text" class="edit-input" value="${currentText}">`);
 
                         // Заменяем текст на input
-                        $this.html(`<input type="text" class="edit-input" value="${currentText}">`);
-                        const $input = $this.find('input');
+                        $titleText.replaceWith($input);
 
                         // Фокусируемся на input
                         $input.focus();
 
                         // Обработчик потери фокуса
-                        $input.on('blur', function () {
-                            finishEdit($this, id, $(this).val().trim(), currentText);
+                        $input.on('blur', function() {
+                            finishEdit($container, id, $(this).val().trim(), currentText);
                         });
 
                         // Обработчик нажатия Enter
-                        $input.on('keypress', function (e) {
+                        $input.on('keypress', function(e) {
                             if (e.which === 13) { // Enter
                                 $(this).blur();
                             }
@@ -139,7 +130,11 @@
                     }
 
                     // Функция завершения редактирования
-                    function finishEdit($element, id, newText, currentText) {
+                    function finishEdit($container, id, newText, currentText) {
+                        // Восстанавливаем текстовый элемент
+                        const $titleText = $(`<span class="title-text">${currentText}</span>`);
+                        $container.find('.edit-input').replaceWith($titleText);
+
                         if (newText && newText !== currentText) {
                             // Отправляем AJAX-запрос для обновления
                             $.ajax({
@@ -149,59 +144,46 @@
                                     title: newText,
                                     _token: '{{ csrf_token() }}'
                                 },
-                                success: function (response) {
+                                success: function(response) {
                                     if (response.success) {
-                                        $element.html(newText + '<i class="fas fa-edit edit-icon"></i>');
-                                        setupEditHandlers($element);
+                                        $titleText.text(newText);
                                     } else {
                                         alert('Ошибка при обновлении названия');
-                                        $element.html(currentText + '<i class="fas fa-edit edit-icon"></i>');
-                                        setupEditHandlers($element);
+                                        $titleText.text(currentText);
                                     }
                                 },
-                                error: function () {
+                                error: function() {
                                     alert('Ошибка при обновлении названия');
-                                    $element.html(currentText + '<i class="fas fa-edit edit-icon"></i>');
-                                    setupEditHandlers($element);
+                                    $titleText.text(currentText);
                                 }
                             });
-                        } else {
-                            $element.html(currentText + '<i class="fas fa-edit edit-icon"></i>');
-                            setupEditHandlers($element);
                         }
                     }
 
-                    // Настройка обработчиков редактирования
-                    function setupEditHandlers(element) {
-                        // Для десктопов - клик по тексту
-                        $(element).on('click', function (e) {
-                            if (!$(e.target).hasClass('edit-icon')) {
+                    // Инициализация при загрузке страницы
+                    $(document).ready(function() {
+                        // Обработчики для десктопов
+                        $('.title-container').on('click', function(e) {
+                            // Активируем редактирование только при клике на текст, не на иконку
+                            if ($(e.target).hasClass('title-text')) {
                                 activateEditMode(this);
                             }
                         });
 
-                        // Для иконки редактирования
-                        $(element).find('.edit-icon').on('click', function (e) {
+                        // Обработчик для иконки редактирования
+                        $('.edit-icon').on('click', function(e) {
                             e.stopPropagation();
                             activateEditMode($(this).parent());
                         });
-                    }
-
-                    // Инициализация при загрузке страницы
-                    $(document).ready(function () {
-                        // Настройка обработчиков для всех заголовков
-                        $('.editable-title').each(function () {
-                            setupEditHandlers(this);
-                        });
 
                         // Обработчики для мобильных кнопок редактирования
-                        $('.mobile-edit-btn').on('click', function () {
+                        $('.mobile-edit-btn').on('click', function() {
                             const id = $(this).data('id');
-                            activateEditMode($(`.editable-title[data-id="${id}"]`));
+                            activateEditMode($(`.title-container[data-id="${id}"]`));
                         });
 
                         // Добавляем подтверждение перед удалением
-                        $('form[action*="destroy"]').on('submit', function (e) {
+                        $('form[action*="destroy"]').on('submit', function(e) {
                             if (!confirm('Вы уверены, что хотите удалить этот файл?')) {
                                 e.preventDefault();
                             }

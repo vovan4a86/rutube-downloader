@@ -13,20 +13,26 @@
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
         <style>
-            .editable-title {
+            .title-container {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .title-text {
                 cursor: pointer;
-                position: relative;
-                padding-right: 25px;
+                border-bottom: 1px dashed transparent;
+                transition: border-bottom-color 0.2s;
+                flex-grow: 1;
+            }
+            .title-text:hover {
+                border-bottom-color: #007bff;
             }
             .edit-icon {
-                position: absolute;
-                right: 0;
-                top: 50%;
-                transform: translateY(-50%);
                 opacity: 0.5;
                 transition: opacity 0.2s;
+                cursor: pointer;
             }
-            .editable-title:hover .edit-icon {
+            .title-container:hover .edit-icon {
                 opacity: 1;
             }
             .edit-input {
