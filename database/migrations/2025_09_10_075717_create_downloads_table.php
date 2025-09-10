@@ -15,10 +15,10 @@ return new class extends Migration
             $table->id();
             $table->string('url');
             $table->string('video_id')->nullable();
-            $table->string('title')->nullable();
-            $table->string('status')->default('pending'); // pending, processing, completed, failed
+            $table->string('title')->nullable()->charset('utf8mb4')->collation('utf8mb4_unicode_ci');
+            $table->string('status')->default('pending');
             $table->string('file_path')->nullable();
-            $table->text('error_message')->nullable();
+            $table->text('error_message')->nullable()->charset('utf8mb4')->collation('utf8mb4_unicode_ci');
             $table->timestamps();
         });
     }
