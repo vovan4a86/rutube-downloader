@@ -25,6 +25,13 @@ class ProcessRutubeDownload implements ShouldQueue
         $this->download = $download;
     }
 
+
+//$env = array_merge(getenv(), [
+//'TEMP' => $tempDir,
+//'TMP' => $tempDir,
+//'TMPDIR' => $tempDir,
+//'PYTHONHASHSEED' => '0'
+//]);
     public function handle(): void
     {
         $this->download->update(['status' => 'processing']);
@@ -35,17 +42,27 @@ class ProcessRutubeDownload implements ShouldQueue
                 mkdir($downloadPath, 0777, true);
             }
 
-            // Создаем уникальную временную директорию для каждого процесса
-            $tempDir = storage_path('app/temp/yt-dlp_' . $this->download->id . '_' . time());
+            // Создаем временную директорию для yt-dlp
+            $tempDir = storage_path('app/temp');
             if (!file_exists($tempDir)) {
-                if (!mkdir($tempDir, 0777, true)) {
-                    throw new \Exception("Не удалось создать временную директорию: $tempDir");
-                }
+                mkdir($tempDir, 0777, true);
             }
 
-            // Генерируем безопасное имя файла
-            $safeTitle = $this->cleanFileName($this->download->title ?? 'video');
-            $outputTemplate = $downloadPath . '/' . $safeTitle . '.%(ext)s';
+            // Определяем ОС
+            $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+
+            // Получаем информацию о видео для извлечения оригинального названия
+            $videoInfo = $this->getVideoInfo($this->download->url, $isWindows);
+            $originalTitle = $videoInfo['title'] ?? $this->extractVideoId($this->download->url);
+
+            // Генерируем безопасное имя файла на основе оригинального названия
+            $safeTitle = $this->cleanFileName($originalTitle);
+
+            // Формируем путь для выходного файла
+            $outputFile = $downloadPath . '/' . $safeTitle . '.mp3';
+
+            // Формируем шаблон для yt-dlp (без расширения, так как мы явно указываем mp3)
+            $outputTemplate = $downloadPath . '/' . $safeTitle;
 
             // Устанавливаем переменные окружения для процесса
             $env = array_merge(getenv(), [
@@ -55,21 +72,26 @@ class ProcessRutubeDownload implements ShouldQueue
                 'PYTHONHASHSEED' => '0'
             ]);
 
+            // Формируем команду в зависимости от ОС
+            $ytdlpPath = $isWindows ? 'C:\\yt-dlp\\yt-dlp.exe' : 'yt-dlp';
+            $ffmpegPath = $isWindows ? 'C:\\ffmpeg\\bin' : '/usr/bin';
+
             $command = [
-                'C:\\yt-dlp\\yt-dlp.exe',
+                $ytdlpPath,
                 '--extract-audio',
                 '--audio-format', 'mp3',
                 '--audio-quality', '0',
-                '--ffmpeg-location', 'C:\\ffmpeg\\bin',
-                '--output', $outputTemplate,
+                '--ffmpeg-location', $ffmpegPath,
+                '--output', $outputTemplate, // Без расширения, так как yt-dlp добавит .mp3
                 '--no-check-certificates',
-                '--verbose', // Добавляем подробный вывод
+                '--no-overwrites',
+                '--print', 'after_move:filepath', // Получаем путь к конечному файлу
                 $this->download->url
             ];
 
             $process = new Process($command);
             $process->setTimeout(3600);
-            $process->setEnv($env); // Устанавливаем переменные окружения
+            $process->setEnv($env);
             $process->run();
 
             // Логируем вывод для отладки
@@ -81,28 +103,35 @@ class ProcessRutubeDownload implements ShouldQueue
                 throw new ProcessFailedException($process);
             }
 
-            // Ищем созданный MP3 файл
-            $files = glob($downloadPath . '/*.mp3');
-            if (!empty($files)) {
-                usort($files, function($a, $b) {
-                    return filemtime($b) - filemtime($a);
-                });
+            // Получаем путь к созданному файлу из вывода yt-dlp
+            $output = trim($process->getOutput());
+            $filePath = $output ?: $outputFile;
 
-                $filePath = $files[0];
-                $fileName = basename($filePath);
-
-                // Обновляем информацию о загрузке
-                $this->download->update([
-                    'status' => 'completed',
-                    'file_path' => $filePath,
-                    'title' => $fileName
-                ]);
-            } else {
-                throw new \Exception('Не удалось найти скачанный MP3 файл');
+            // Проверяем, что файл действительно существует
+            if (!file_exists($filePath)) {
+                // Если файл не найден по пути из вывода, ищем по ожидаемому пути
+                if (file_exists($outputFile)) {
+                    $filePath = $outputFile;
+                } else {
+                    // Ищем любой MP3 файл в директории
+                    $files = glob($downloadPath . '/*.mp3');
+                    if (!empty($files)) {
+                        usort($files, function($a, $b) {
+                            return filemtime($b) - filemtime($a);
+                        });
+                        $filePath = $files[0];
+                    } else {
+                        throw new \Exception('Не удалось найти скачанный MP3 файл');
+                    }
+                }
             }
 
-            // Очищаем временную директорию после успешного выполнения
-            $this->deleteDirectory($tempDir);
+            // Обновляем информацию о загрузке
+            $this->download->update([
+                'status' => 'completed',
+                'file_path' => $filePath,
+                'title' => $originalTitle // Сохраняем оригинальное название
+            ]);
 
         } catch (\Exception $e) {
             \Log::error('Download error: ' . $e->getMessage());
@@ -110,36 +139,60 @@ class ProcessRutubeDownload implements ShouldQueue
                 'status' => 'failed',
                 'error_message' => substr($e->getMessage(), 0, 255)
             ]);
-
-            // Пытаемся очистить временную директорию даже в случае ошибки
-            if (isset($tempDir) && file_exists($tempDir)) {
-                $this->deleteDirectory($tempDir);
-            }
         }
     }
 
-// Добавляем метод для рекурсивного удаления директории
-    private function deleteDirectory($dir)
+// Метод для получения информации о видео
+    private function getVideoInfo($url, $isWindows)
     {
-        if (!file_exists($dir)) {
-            return true;
-        }
+        $ytdlpPath = $isWindows ? 'C:\\yt-dlp\\yt-dlp.exe' : 'yt-dlp';
 
-        if (!is_dir($dir)) {
-            return unlink($dir);
-        }
+        $command = [
+            $ytdlpPath,
+            '--dump-json',
+            '--no-check-certificates',
+            '--no-playlist',
+            $url
+        ];
 
-        foreach (scandir($dir) as $item) {
-            if ($item == '.' || $item == '..') {
-                continue;
+        $process = new Process($command);
+        $process->setTimeout(30);
+        $process->run();
+
+        if ($process->isSuccessful()) {
+            $output = $process->getOutput();
+            $info = json_decode($output, true);
+
+            if (json_last_error() === JSON_ERROR_NONE && isset($info['title'])) {
+                return $info;
+            } else {
+                \Log::warning('Не удалось распарсить информацию о видео: ' . $output);
             }
-
-            if (!$this->deleteDirectory($dir . DIRECTORY_SEPARATOR . $item)) {
-                return false;
-            }
+        } else {
+            \Log::warning('Не удалось получить информацию о видео: ' . $process->getErrorOutput());
         }
 
-        return rmdir($dir);
+        // Если не удалось получить информацию, возвращаем заглушку
+        return ['title' => $this->extractVideoId($url)];
+    }
+
+// Метод для извлечения ID видео из URL
+    private function extractVideoId($url)
+    {
+        $parsedUrl = parse_url($url);
+        if (!isset($parsedUrl['path'])) {
+            return 'video';
+        }
+
+        $pathParts = explode('/', trim($parsedUrl['path'], '/'));
+        $videoId = end($pathParts);
+
+        // Удаляем возможные параметры из ID
+        if (strpos($videoId, '?') !== false) {
+            $videoId = substr($videoId, 0, strpos($videoId, '?'));
+        }
+
+        return $videoId ?: 'video';
     }
 
 // Метод для очистки имени файла

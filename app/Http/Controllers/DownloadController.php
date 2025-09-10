@@ -55,6 +55,24 @@ class DownloadController extends Controller
         return response()->download($download->file_path);
     }
 
+    public function destroy(Download $download)
+    {
+        try {
+            // Удаляем файл с диска, если он существует
+            if ($download->file_path && file_exists($download->file_path)) {
+                unlink($download->file_path);
+            }
+
+            // Удаляем запись из базы данных
+            $download->delete();
+
+            return redirect()->route('downloads.index')->with('success', 'Файл успешно удален');
+        } catch (\Exception $e) {
+            \Log::error('Delete error: ' . $e->getMessage());
+            return redirect()->route('downloads.index')->with('error', 'Ошибка при удалении файла');
+        }
+    }
+
     private function extractVideoId(string $url): ?string
     {
         $parsedUrl = parse_url($url);

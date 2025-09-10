@@ -26,6 +26,7 @@ Route::get('/dashboard', function () {
 Route::get('/', [DownloadController::class, 'index'])->name('downloads.index');
 Route::post('/downloads', [DownloadController::class, 'store'])->name('downloads.store');
 Route::get('/downloads/{download}', [DownloadController::class, 'download'])->name('downloads.download');
+Route::delete('/downloads/{download}', [DownloadController::class, 'destroy'])->name('downloads.destroy');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

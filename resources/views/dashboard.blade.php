@@ -62,12 +62,37 @@
                                         <a href="{{ route('downloads.download', $download) }}"
                                            class="btn btn-sm btn-success">Скачать</a>
                                     @endif
+
+                                    <form action="{{ route('downloads.destroy', $download) }}" method="POST"
+                                          class="d-inline">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-sm btn-danger"
+                                                onclick="return confirm('Вы уверены, что хотите удалить этот файл?')">
+                                            Удалить
+                                        </button>
+                                    </form>
                                 </td>
                             </tr>
                         @endforeach
                         </tbody>
                     </table>
                 </div>
+
+                <script>
+                    // Добавляем подтверждение перед удалением
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const deleteForms = document.querySelectorAll('form[action*="destroy"]');
+
+                        deleteForms.forEach(form => {
+                            form.addEventListener('submit', function(e) {
+                                if (!confirm('Вы уверены, что хотите удалить этот файл?')) {
+                                    e.preventDefault();
+                                }
+                            });
+                        });
+                    });
+                </script>
             </div>
         </div>
     </div>
