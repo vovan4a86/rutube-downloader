@@ -66,10 +66,10 @@ class DownloadController extends Controller
             // Удаляем запись из базы данных
             $download->delete();
 
-            return redirect()->route('downloads.index')->with('success', 'Файл успешно удален');
+            return redirect()->route('dashboard')->with('success', 'Файл успешно удален');
         } catch (\Exception $e) {
             \Log::error('Delete error: ' . $e->getMessage());
-            return redirect()->route('downloads.index')->with('error', 'Ошибка при удалении файла');
+            return redirect()->route('dashboard')->with('error', 'Ошибка при удалении файла');
         }
     }
 
