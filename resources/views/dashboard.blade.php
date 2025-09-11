@@ -5,10 +5,10 @@
         </h2>
     </x-slot>
 
-    <div class="py-12">
+    <div class="py-3">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
-                <div class="p-6 text-gray-900 dark:text-gray-100 container mt-3">
+                <div class="p-3 text-gray-900 dark:text-gray-100 container mt-2">
                     <h1 class="mb-4">Скачать видео с Rutube в MP3</h1>
 
                     @if(session('success'))
@@ -33,14 +33,12 @@
                         <button type="submit" class="btn btn-primary">Скачать в MP3</button>
                     </form>
 
-                    <h2 class="mt-5">История загрузок</h2>
+                    <h2 class="mt-4 mb-2">История загрузок</h2>
                     <div class="table-responsive">
                         <table class="table table-striped">
                             <thead>
                             <tr>
                                 <th>Видео</th>
-                                <th>Статус</th>
-                                <th>Действия</th>
                             </tr>
                             </thead>
                             <tbody>
@@ -56,39 +54,37 @@
                                                 <i class="fas fa-edit"></i>
                                             </button>
                                         </div>
-
-                                    </td>
-                                    <td>
-                                <span class="badge
-                                    @if($download->status === 'completed') bg-success
-                                    @elseif($download->status === 'processing') bg-warning
-                                    @elseif($download->status === 'failed') bg-danger
-                                    @else bg-secondary @endif">
-                                    {{ $download->status }}
-                                </span>
-                                    </td>
-                                    <td class="action-buttons d-flex justify-content-around">
-                                        @if($download->status === 'completed')
-                                            <div>
-                                                <a href="{{ route('downloads.download', $download) }}"
-                                                   class="btn btn-sm btn-success">
-                                                    <i class="fas fa-download"></i>
-                                                    <span class="d-none d-md-inline">Скачать</span>
-                                                </a>
+                                        <div class="footer d-flex justify-content-between">
+                                            <div class="self-start">
+                                                 <span class="badge
+                                                    @if($download->status === 'completed') bg-success
+                                                    @elseif($download->status === 'processing') bg-warning
+                                                    @elseif($download->status === 'failed') bg-danger
+                                                    @else bg-secondary @endif">
+                                                    {{ $download->status }}
+                                                 </span>
                                             </div>
-                                        @endif
-
-                                        <div>
-                                            <form action="{{ route('downloads.destroy', $download) }}" method="POST"
-                                                  class="d-inline">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" class="btn btn-sm btn-danger"
-                                                        onclick="return confirm('Вы уверены, что хотите удалить этот файл?')">
-                                                    <i class="fas fa-trash"></i>
-                                                    <span class="d-none d-md-inline">Удалить</span>
-                                                </button>
-                                            </form>
+                                            <div class="d-flex">
+                                                <div class="mx-3">
+                                                    @if($download->status === 'completed')
+                                                        <a href="{{ route('downloads.download', $download) }}"
+                                                           class="btn btn-sm btn-success">
+                                                            <i class="fas fa-download"></i>
+                                                            <span class="d-none d-md-inline">Скачать</span>
+                                                        </a>
+                                                    @endif
+                                                </div>
+                                                <form action="{{ route('downloads.destroy', $download) }}" method="POST"
+                                                      class="d-inline">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="btn btn-sm btn-danger"
+                                                            onclick="return confirm('Вы уверены, что хотите удалить этот файл?')">
+                                                        <i class="fas fa-trash"></i>
+                                                        <span class="d-none d-md-inline">Удалить</span>
+                                                    </button>
+                                                </form>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
@@ -117,12 +113,12 @@
                         $input.focus();
 
                         // Обработчик потери фокуса
-                        $input.on('blur', function() {
+                        $input.on('blur', function () {
                             finishEdit($container, id, $(this).val().trim(), currentText);
                         });
 
                         // Обработчик нажатия Enter
-                        $input.on('keypress', function(e) {
+                        $input.on('keypress', function (e) {
                             if (e.which === 13) { // Enter
                                 $(this).blur();
                             }
@@ -144,7 +140,7 @@
                                     title: newText,
                                     _token: '{{ csrf_token() }}'
                                 },
-                                success: function(response) {
+                                success: function (response) {
                                     if (response.success) {
                                         $titleText.text(newText);
                                     } else {
@@ -152,7 +148,7 @@
                                         $titleText.text(currentText);
                                     }
                                 },
-                                error: function() {
+                                error: function () {
                                     alert('Ошибка при обновлении названия');
                                     $titleText.text(currentText);
                                 }
@@ -161,9 +157,9 @@
                     }
 
                     // Инициализация при загрузке страницы
-                    $(document).ready(function() {
+                    $(document).ready(function () {
                         // Обработчики для десктопов
-                        $('.title-container').on('click', function(e) {
+                        $('.title-container').on('click', function (e) {
                             // Активируем редактирование только при клике на текст, не на иконку
                             if ($(e.target).hasClass('title-text')) {
                                 activateEditMode(this);
@@ -171,19 +167,19 @@
                         });
 
                         // Обработчик для иконки редактирования
-                        $('.edit-icon').on('click', function(e) {
+                        $('.edit-icon').on('click', function (e) {
                             e.stopPropagation();
                             activateEditMode($(this).parent());
                         });
 
                         // Обработчики для мобильных кнопок редактирования
-                        $('.mobile-edit-btn').on('click', function() {
+                        $('.mobile-edit-btn').on('click', function () {
                             const id = $(this).data('id');
                             activateEditMode($(`.title-container[data-id="${id}"]`));
                         });
 
                         // Добавляем подтверждение перед удалением
-                        $('form[action*="destroy"]').on('submit', function(e) {
+                        $('form[action*="destroy"]').on('submit', function (e) {
                             if (!confirm('Вы уверены, что хотите удалить этот файл?')) {
                                 e.preventDefault();
                             }

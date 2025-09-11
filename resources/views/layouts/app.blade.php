@@ -14,9 +14,14 @@
 
         <style>
             .title-container {
-                display: flex;
+                display: block;
                 align-items: center;
                 gap: 8px;
+                padding-bottom: 5px;
+            }
+            .footer {
+                padding-top: 5px;
+                border-top: 1px dotted grey;
             }
             .title-text {
                 cursor: pointer;
