@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Download;
+use Barryvdh\Debugbar\Facades\Debugbar;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -25,13 +26,6 @@ class ProcessRutubeDownload implements ShouldQueue
         $this->download = $download;
     }
 
-
-//$env = array_merge(getenv(), [
-//'TEMP' => $tempDir,
-//'TMP' => $tempDir,
-//'TMPDIR' => $tempDir,
-//'PYTHONHASHSEED' => '0'
-//]);
     public function handle(): void
     {
         $this->download->update(['status' => 'processing']);
@@ -85,6 +79,7 @@ class ProcessRutubeDownload implements ShouldQueue
                 '--output', $outputTemplate, // Без расширения, так как yt-dlp добавит .mp3
                 '--no-check-certificates',
                 '--no-overwrites',
+                '-f', 'worst',
                 '--print', 'after_move:filepath', // Получаем путь к конечному файлу
                 $this->download->url
             ];
@@ -199,13 +194,14 @@ class ProcessRutubeDownload implements ShouldQueue
     private function cleanFileName($filename)
     {
         // Удаляем эмодзи и другие специальные символы
-        $cleaned = preg_replace('/[^\x{0000}-\x{007F}]/u', '', $filename);
+//        $cleaned = preg_replace('/[^\x{0000}-\x{007F}]/u', '', $filename);
 
         // Заменяем пробелы и другие проблемные символы
-        $cleaned = preg_replace('/[\s\/\\\\:\*\?"<>\|]/', '_', $cleaned);
+        $cleaned = preg_replace('/[\s\/\\\\:\*\?"<>\|]/', '_', $filename);
 
         // Удаляем множественные подчеркивания
         $cleaned = preg_replace('/_+/', '_', $cleaned);
+        $cleaned = \Str::slug($cleaned);
 
         // Обрезаем длину имени файла
         if (strlen($cleaned) > 200) {
