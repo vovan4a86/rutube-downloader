@@ -30,7 +30,12 @@
                             <input type="url" class="form-control" id="url" name="url" required
                                    placeholder="https://rutube.ru/video/...">
                         </div>
-                        <button type="submit" class="btn btn-primary">Скачать в MP3</button>
+                        <button type="submit" class="btn btn-primary">
+                            <span id="btn-text">Скачать в MP3</span>
+                            <div id="btn-spinner" class="spinner-border spinner-border-sm d-none" role="status">
+                                <span class="visually-hidden">Загрузка...</span>
+                            </div>
+                        </button>
                     </form>
 
                     <h2 class="mt-4 mb-2">История загрузок</h2>
@@ -43,7 +48,8 @@
                             </thead>
                             <tbody>
                             @foreach($downloads as $download)
-                                <tr>
+                                <tr class="download-row" data-id="{{ $download->id }}"
+                                    data-status="{{ $download->status }}">
                                     <td>
                                         <div class="title-container" data-id="{{ $download->id }}">
                                             <span
@@ -54,15 +60,37 @@
                                                 <i class="fas fa-edit"></i>
                                             </button>
                                         </div>
+
+                                        @if($download->status !== 'completed')
+                                            <div class="progress mt-2">
+                                                <div id="progress-{{ $download->id }}"
+                                                     class="progress-bar progress-bar-striped progress-bar-animated"
+                                                     role="progressbar"
+                                                     style="width: {{ $download->progress }}%; height: 20px;"
+                                                     aria-valuenow="{{ $download->progress }}"
+                                                     aria-valuemin="0"
+                                                     aria-valuemax="100">
+                                                    <span class="progress-text">{{ $download->progress }}%</span>
+                                                </div>
+                                            </div>
+                                            <div class="progress-status mt-1 small text-muted">
+                                                Загрузка и конвертация...
+                                            </div>
+                                        @endif
+
                                         <div class="footer d-flex justify-content-between">
                                             <div class="self-start">
-                                                 <span class="badge
-                                                    @if($download->status === 'completed') bg-success
-                                                    @elseif($download->status === 'processing') bg-warning
-                                                    @elseif($download->status === 'failed') bg-danger
-                                                    @else bg-secondary @endif">
-                                                    {{ $download->status }}
-                                                 </span>
+                                                   <span class="badge
+                                                        @if($download->status === 'completed') bg-success
+                                                        @elseif($download->status === 'processing') bg-warning text-dark
+                                                        @elseif($download->status === 'failed') bg-danger
+                                                        @else bg-secondary @endif">
+                                                        @if($download->status === 'processing')
+                                                           В процессе ({{ $download->progress }}%)
+                                                       @else
+                                                           {{ $download->status }}
+                                                       @endif
+                                                   </span>
                                             </div>
                                             <div class="d-flex">
                                                 <div class="mx-3">
@@ -74,6 +102,16 @@
                                                         </a>
                                                     @endif
                                                 </div>
+                                                @if($download->status === 'processing')
+                                                    <div class="mx-3">
+                                                        <form action="{{ route('downloads.cancel', $download) }}" method="POST" class="d-inline cancel-form">
+                                                            @csrf
+                                                            <button type="submit" class="btn btn-sm btn-warning">
+                                                                <i class="fas fa-stop"></i> Остановить загрузку
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                @endif
                                                 <form action="{{ route('downloads.destroy', $download) }}" method="POST"
                                                       class="d-inline">
                                                     @csrf
@@ -93,99 +131,6 @@
                         </table>
                     </div>
                 </div>
-
-                <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-                <script>
-                    // Функция активации редактирования
-                    function activateEditMode(element) {
-                        const $container = $(element);
-                        const $titleText = $container.find('.title-text');
-                        const currentText = $titleText.text().trim();
-                        const id = $container.data('id');
-
-                        // Создаем input для редактирования
-                        const $input = $(`<input type="text" class="edit-input" value="${currentText}">`);
-
-                        // Заменяем текст на input
-                        $titleText.replaceWith($input);
-
-                        // Фокусируемся на input
-                        $input.focus();
-
-                        // Обработчик потери фокуса
-                        $input.on('blur', function () {
-                            finishEdit($container, id, $(this).val().trim(), currentText);
-                        });
-
-                        // Обработчик нажатия Enter
-                        $input.on('keypress', function (e) {
-                            if (e.which === 13) { // Enter
-                                $(this).blur();
-                            }
-                        });
-                    }
-
-                    // Функция завершения редактирования
-                    function finishEdit($container, id, newText, currentText) {
-                        // Восстанавливаем текстовый элемент
-                        const $titleText = $(`<span class="title-text">${currentText}</span>`);
-                        $container.find('.edit-input').replaceWith($titleText);
-
-                        if (newText && newText !== currentText) {
-                            // Отправляем AJAX-запрос для обновления
-                            $.ajax({
-                                url: `/downloads/${id}`,
-                                type: 'PATCH',
-                                data: {
-                                    title: newText,
-                                    _token: '{{ csrf_token() }}'
-                                },
-                                success: function (response) {
-                                    if (response.success) {
-                                        $titleText.text(newText);
-                                    } else {
-                                        alert('Ошибка при обновлении названия');
-                                        $titleText.text(currentText);
-                                    }
-                                },
-                                error: function () {
-                                    alert('Ошибка при обновлении названия');
-                                    $titleText.text(currentText);
-                                }
-                            });
-                        }
-                    }
-
-                    // Инициализация при загрузке страницы
-                    $(document).ready(function () {
-                        // Обработчики для десктопов
-                        $('.title-container').on('click', function (e) {
-                            // Активируем редактирование только при клике на текст, не на иконку
-                            if ($(e.target).hasClass('title-text')) {
-                                activateEditMode(this);
-                            }
-                        });
-
-                        // Обработчик для иконки редактирования
-                        $('.edit-icon').on('click', function (e) {
-                            e.stopPropagation();
-                            activateEditMode($(this).parent());
-                        });
-
-                        // Обработчики для мобильных кнопок редактирования
-                        $('.mobile-edit-btn').on('click', function () {
-                            const id = $(this).data('id');
-                            activateEditMode($(`.title-container[data-id="${id}"]`));
-                        });
-
-                        // Добавляем подтверждение перед удалением
-                        $('form[action*="destroy"]').on('submit', function (e) {
-                            if (!confirm('Вы уверены, что хотите удалить этот файл?')) {
-                                e.preventDefault();
-                            }
-                        });
-                    });
-                </script>
             </div>
         </div>
     </div>

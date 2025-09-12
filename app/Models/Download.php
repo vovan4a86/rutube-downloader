@@ -13,11 +13,19 @@ class Download extends Model
         'title',
         'status',
         'file_path',
-        'error_message'
+        'error_message',
+        'progress'
     ];
 
     protected $casts = [
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
+
+    protected $dates = ['cancelled_at'];
+
+    public function isCancelled()
+    {
+        return !is_null($this->cancelled_at);
+    }
 }

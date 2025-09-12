@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Jobs\ProcessRutubeDownload;
 use App\Models\Download;
+use Barryvdh\Debugbar\Facades\Debugbar;
+use Composer\DependencyResolver\SolverBugException;
 use Illuminate\Http\Request;
 
 class DownloadController extends Controller
@@ -37,7 +39,7 @@ class DownloadController extends Controller
         $download = Download::create([
             'url' => $url,
             'video_id' => $videoId,
-            'status' => 'pending'
+            'status' => 'processing'
         ]);
 
         // Запускаем job для обработки
@@ -52,7 +54,7 @@ class DownloadController extends Controller
             return redirect()->back()->with('error', 'Файл не готов или отсутствует');
         }
 
-        return response()->download($download->file_path);
+        return response()->download($download->file_path, $download->title);
     }
 
     public function destroy(Download $download)
@@ -106,5 +108,51 @@ class DownloadController extends Controller
 
         $pathParts = explode('/', trim($parsedUrl['path'], '/'));
         return end($pathParts);
+    }
+
+    public function progress(Request $request)
+    {
+        $ids = $request->get('ids', []);
+
+        if (empty($ids)) {
+            return response()->json([]);
+        }
+
+        $downloads = Download::whereIn('id', $ids)->get();
+
+        $progressData = [];
+        foreach ($downloads as $download) {
+            // Если загрузка отменена, но еще не обработана в job
+            if ($download->isCancelled() && $download->status === 'processing') {
+                $download->update(['status' => 'cancelled']);
+            }
+
+            $progressData[$download->id] = [
+                'progress' => $download->progress,
+                'status' => $download->status
+            ];
+        }
+
+        return response()->json($progressData);
+    }
+
+    public function cancel(Download $download)
+    {
+        if ($download->status !== 'processing') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Можно отменить только загрузку в процессе'
+            ]);
+        }
+
+        $download->update([
+            'cancelled_at' => now(),
+            'status' => 'cancelled'
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Загрузка отменена'
+        ]);
     }
 }

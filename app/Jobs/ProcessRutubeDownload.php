@@ -28,7 +28,17 @@ class ProcessRutubeDownload implements ShouldQueue
 
     public function handle(): void
     {
-        $this->download->update(['status' => 'processing']);
+        // Проверяем, не была ли отменена загрузка перед началом
+        if ($this->download->isCancelled()) {
+            \Log::info('Загрузка была отменена перед началом выполнения');
+            return;
+        }
+
+        $this->download->update([
+            'status' => 'processing',
+            'progress' => 5,
+            'title' => 'Инициализация загрузки...'
+        ]);
 
         try {
             $downloadPath = storage_path('app/downloads');
@@ -45,20 +55,22 @@ class ProcessRutubeDownload implements ShouldQueue
             // Определяем ОС
             $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
 
-            // Получаем информацию о видео для извлечения оригинального названия
+            // Получаем информацию о видео
+            $this->download->update(['progress' => 10, 'title' => 'Получение информации о видео...']);
             $videoInfo = $this->getVideoInfo($this->download->url, $isWindows);
             $originalTitle = $videoInfo['title'] ?? $this->extractVideoId($this->download->url);
 
-            // Генерируем безопасное имя файла на основе оригинального названия
+            // Обновляем название
+            $this->download->update(['title' => $originalTitle]);
+
+            // Генерируем безопасное имя файла
             $safeTitle = $this->cleanFileName($originalTitle);
 
             // Формируем путь для выходного файла
             $outputFile = $downloadPath . '/' . $safeTitle . '.mp3';
-
-            // Формируем шаблон для yt-dlp (без расширения, так как мы явно указываем mp3)
             $outputTemplate = $downloadPath . '/' . $safeTitle;
 
-            // Устанавливаем переменные окружения для процесса
+            // Устанавливаем переменные окружения
             $env = array_merge(getenv(), [
                 'TEMP' => $tempDir,
                 'TMP' => $tempDir,
@@ -66,7 +78,7 @@ class ProcessRutubeDownload implements ShouldQueue
                 'PYTHONHASHSEED' => '0'
             ]);
 
-            // Формируем команду в зависимости от ОС
+            // Формируем команду
             $ytdlpPath = $isWindows ? 'C:\\yt-dlp\\yt-dlp.exe' : 'yt-dlp';
             $ffmpegPath = $isWindows ? 'C:\\ffmpeg\\bin' : '/usr/bin';
 
@@ -76,39 +88,69 @@ class ProcessRutubeDownload implements ShouldQueue
                 '--audio-format', 'mp3',
                 '--audio-quality', '0',
                 '--ffmpeg-location', $ffmpegPath,
-                '--output', $outputTemplate, // Без расширения, так как yt-dlp добавит .mp3
+                '--output', $outputTemplate,
                 '--no-check-certificates',
                 '--no-overwrites',
-                '-f', 'worst',
-                '--print', 'after_move:filepath', // Получаем путь к конечному файлу
+                '--newline',
+                '--progress',
+                '--print', 'after_move:filepath',
                 $this->download->url
             ];
 
             $process = new Process($command);
             $process->setTimeout(3600);
             $process->setEnv($env);
-            $process->run();
+
+            // Запускаем процесс с обработчиком вывода
+            $process->run(function ($type, $buffer) {
+                // Проверяем, не была ли отменена загрузка
+                $this->download->refresh();
+                if ($this->download->isCancelled()) {
+                    throw new \Exception('Загрузка отменена пользователем');
+                }
+
+                if (Process::ERR === $type) {
+                    \Log::error('yt-dlp error: ' . $buffer);
+                } else {
+                    // Парсим прогресс из вывода
+                    $progress = $this->parseProgress($buffer);
+
+                    if ($progress > 0) {
+                        // Преобразуем прогресс загрузки (0-100%) в общий прогресс (20-90%)
+                        $overallProgress = 20 + (70 * $progress / 100);
+                        $this->download->update(['progress' => (int)$overallProgress]);
+                    }
+
+                    \Log::info('yt-dlp output: ' . $buffer);
+                }
+            });
+
+            // Проверяем отмену после завершения процесса
+            $this->download->refresh();
+            if ($this->download->isCancelled()) {
+                // Удаляем частично скачанный файл
+                if (isset($filePath) && file_exists($filePath)) {
+                    unlink($filePath);
+                }
+                throw new \Exception('Загрузка отменена пользователем');
+            }
 
             // Логируем вывод для отладки
             \Log::info('yt-dlp command: ' . implode(' ', $command));
-            \Log::info('yt-dlp output: ' . $process->getOutput());
-            \Log::info('yt-dlp error output: ' . $process->getErrorOutput());
 
             if (!$process->isSuccessful()) {
                 throw new ProcessFailedException($process);
             }
 
-            // Получаем путь к созданному файлу из вывода yt-dlp
+            // Получаем путь к созданному файлу
             $output = trim($process->getOutput());
             $filePath = $output ?: $outputFile;
 
-            // Проверяем, что файл действительно существует
+            // Проверяем, что файл существует
             if (!file_exists($filePath)) {
-                // Если файл не найден по пути из вывода, ищем по ожидаемому пути
                 if (file_exists($outputFile)) {
                     $filePath = $outputFile;
                 } else {
-                    // Ищем любой MP3 файл в директории
                     $files = glob($downloadPath . '/*.mp3');
                     if (!empty($files)) {
                         usort($files, function($a, $b) {
@@ -125,16 +167,49 @@ class ProcessRutubeDownload implements ShouldQueue
             $this->download->update([
                 'status' => 'completed',
                 'file_path' => $filePath,
-                'title' => $originalTitle // Сохраняем оригинальное название
+                'title' => $originalTitle,
+                'progress' => 100
             ]);
 
         } catch (\Exception $e) {
             \Log::error('Download error: ' . $e->getMessage());
-            $this->download->update([
-                'status' => 'failed',
-                'error_message' => substr($e->getMessage(), 0, 255)
-            ]);
+
+            if ($this->download->isCancelled()) {
+                $this->download->update([
+                    'status' => 'cancelled',
+                    'error_message' => 'Загрузка отменена пользователем'
+                ]);
+            } else {
+                $this->download->update([
+                    'status' => 'failed',
+                    'error_message' => substr($e->getMessage(), 0, 255),
+                    'progress' => 0
+                ]);
+            }
         }
+    }
+
+// Функция для парсинга прогресса
+    private function parseProgress($buffer)
+    {
+        // Пытаемся найти процент прогресса в разных форматах
+        if (preg_match('/\[download\]\s+(\d+\.\d+)%/', $buffer, $matches)) {
+            return (float)$matches[1];
+        }
+
+        if (preg_match('/\[download\]\s+(\d+)%/', $buffer, $matches)) {
+            return (int)$matches[1];
+        }
+
+        if (preg_match('/(\d+\.\d+)%/', $buffer, $matches)) {
+            return (float)$matches[1];
+        }
+
+        if (preg_match('/(\d+)%/', $buffer, $matches)) {
+            return (int)$matches[1];
+        }
+
+        return 0;
     }
 
 // Метод для получения информации о видео

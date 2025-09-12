@@ -18,8 +18,10 @@ Route::middleware('auth')->group(function () {
 
 Route::get('/dashboard', [DownloadController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
 Route::post('/downloads', [DownloadController::class, 'store'])->name('downloads.store');
+Route::get('/downloads/progress', [DownloadController::class, 'progress'])->name('downloads.progress');
 Route::get('/downloads/{download}', [DownloadController::class, 'download'])->name('downloads.download');
 Route::delete('/downloads/{download}', [DownloadController::class, 'destroy'])->name('downloads.destroy');
 Route::patch('/downloads/{download}', [DownloadController::class, 'update'])->name('downloads.update');
+Route::post('/downloads/{download}/cancel', [DownloadController::class, 'cancel'])->name('downloads.cancel');
 
 require __DIR__.'/auth.php';
