@@ -33,6 +33,7 @@ class ProcessRutubeDownload implements ShouldQueue
             \Log::info('Загрузка была отменена перед началом выполнения');
             return;
         }
+        Debugbar::log('sdsdfs');
 
         $this->download->update([
             'status' => 'processing',

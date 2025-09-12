@@ -1,5 +1,5 @@
 @import "bootstrap";
-@import "styles.css";
+/*@import "styles.css";*/
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

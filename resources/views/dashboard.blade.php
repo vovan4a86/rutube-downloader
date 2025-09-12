@@ -107,7 +107,7 @@
                                                         <form action="{{ route('downloads.cancel', $download) }}" method="POST" class="d-inline cancel-form">
                                                             @csrf
                                                             <button type="submit" class="btn btn-sm btn-warning">
-                                                                <i class="fas fa-stop"></i> Остановить загрузку
+                                                                <i class="fas fa-stop"></i> Остановить
                                                             </button>
                                                         </form>
                                                     </div>
