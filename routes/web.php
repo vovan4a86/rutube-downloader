@@ -16,6 +16,37 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
+Route::get('/diagnostics', function () {
+    // Проверяем доступность yt-dlp
+    $ytdlpCheck = shell_exec('which yt-dlp');
+    $ytdlpVersion = shell_exec('yt-dlp --version');
+
+    // Проверяем доступность ffmpeg
+    $ffmpegCheck = shell_exec('which ffmpeg');
+    $ffmpegVersion = shell_exec('ffmpeg -version | head -n 1');
+
+    // Проверяем права на запись
+    $storageWritable = is_writable(storage_path());
+    $downloadsWritable = is_writable(storage_path('app/downloads'));
+
+    return response()->json([
+        'yt-dlp' => [
+            'path' => trim($ytdlpCheck),
+            'version' => trim($ytdlpVersion),
+            'available' => !empty($ytdlpCheck)
+        ],
+        'ffmpeg' => [
+            'path' => trim($ffmpegCheck),
+            'version' => trim($ffmpegVersion),
+            'available' => !empty($ffmpegCheck)
+        ],
+        'permissions' => [
+            'storage_writable' => $storageWritable,
+            'downloads_writable' => $downloadsWritable
+        ]
+    ]);
+});
+
 Route::get('/dashboard', [DownloadController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
 Route::post('/downloads', [DownloadController::class, 'store'])->name('downloads.store');
 Route::get('/downloads/progress', [DownloadController::class, 'progress'])->name('downloads.progress');
