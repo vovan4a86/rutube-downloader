@@ -33,7 +33,6 @@ class ProcessRutubeDownload implements ShouldQueue
             \Log::info('Загрузка была отменена перед началом выполнения');
             return;
         }
-        Debugbar::log('sdsdfs');
 
         $this->download->update([
             'status' => 'processing',
@@ -88,12 +87,14 @@ class ProcessRutubeDownload implements ShouldQueue
                 '--extract-audio',
                 '--audio-format', 'mp3',
                 '--audio-quality', '0',
+                '-f', 'worst',
                 '--ffmpeg-location', $ffmpegPath,
                 '--output', $outputTemplate,
                 '--no-check-certificates',
                 '--no-overwrites',
                 '--newline',
                 '--progress',
+                '--console-title',
                 '--print', 'after_move:filepath',
                 $this->download->url
             ];
@@ -120,6 +121,7 @@ class ProcessRutubeDownload implements ShouldQueue
                         // Преобразуем прогресс загрузки (0-100%) в общий прогресс (20-90%)
                         $overallProgress = 20 + (70 * $progress / 100);
                         $this->download->update(['progress' => (int)$overallProgress]);
+                        \Log::info('Progress updated to: ' . (int)$overallProgress . '%');
                     }
 
                     \Log::info('yt-dlp output: ' . $buffer);
