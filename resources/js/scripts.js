@@ -83,7 +83,7 @@ function pollDownloadProgress() {
     console.log('Опрашиваем прогресс для ID:', ids);
 
     // Используем правильный URL с учетом базового пути приложения
-    const progressUrl = "{{ url('downloads/progress') }}";
+    const progressUrl = "/downloads/progress";
 
     $.ajax({
         url: progressUrl,
