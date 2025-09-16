@@ -80,12 +80,19 @@ function pollDownloadProgress() {
         return $(this).data('id');
     }).get();
 
+    console.log('Опрашиваем прогресс для ID:', ids);
+
+    // Используем правильный URL с учетом базового пути приложения
+    const progressUrl = "{{ url('downloads/progress') }}";
+
     $.ajax({
-        url: '/downloads/progress',
+        url: progressUrl,
         type: 'GET',
         data: {ids: ids},
         success: function(data) {
+            console.log('Получены данные прогресса:', data);
             let hasActiveDownloads = false;
+            let needsReload = false;
 
             // Обновляем прогресс для каждой загрузки
             for (const id in data) {
@@ -112,19 +119,18 @@ function pollDownloadProgress() {
                             // Обновляем data-атрибут
                             row.attr('data-status', 'processing');
                         } else {
+                            // Если статус изменился, помечаем для перезагрузки
+                            needsReload = true;
                             statusBadge.text(status);
                             if (status === 'completed') {
                                 statusBadge.removeClass('bg-warning text-dark').addClass('bg-success');
                             } else if (status === 'failed') {
                                 statusBadge.removeClass('bg-warning text-dark').addClass('bg-danger');
+                            } else if (status === 'cancelled') {
+                                statusBadge.removeClass('bg-warning text-dark').addClass('bg-secondary');
                             }
                             // Обновляем data-атрибут
                             row.attr('data-status', status);
-
-                            // Если статус изменился, перезагружаем страницу через 2 секунды
-                            setTimeout(() => {
-                                location.reload();
-                            }, 2000);
                         }
                     }
                 }
@@ -139,6 +145,13 @@ function pollDownloadProgress() {
                 $('#btn-spinner').addClass('d-none');
                 $('#btn-text').text('Скачать в MP3');
                 $('#download-btn').prop('disabled', false);
+            }
+
+            // Если есть завершенные загрузки, перезагружаем страницу
+            if (needsReload) {
+                setTimeout(() => {
+                    location.reload();
+                }, 2000);
             }
         },
         error: function(xhr, status, error) {
